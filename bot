@@ -8,10 +8,15 @@ from decimal import Decimal
 # Configuración
 SOLANA_RPC_URL = "https://api.mainnet-beta.solana.com"
 WHALE_WALLET = "MfDuWeqSHEqTFVYZ7LoexgAK9dxk7cy4DFJWjWMGVWa"
-YOUR_WALLET = "2kWSgLGnSPLfuVXrCoikkteYbPL41bfdppdkViitaQ2K"
-PROPORTION = 0.1  # Ajusta según el porcentaje de inversión
+YOUR_WALLET = "TuWalletDePhantomAquí"
 
 solana_client = Client(SOLANA_RPC_URL)
+
+def get_wallet_balance(wallet_address):
+    response = solana_client.get_balance(Pubkey.from_string(wallet_address))
+    if not response or "result" not in response:
+        return Decimal(0)
+    return Decimal(response["result"]["value"]) / Decimal(10**9)  # Convertir lamports a SOL
 
 def get_latest_transactions(wallet_address):
     response = solana_client.get_signatures_for_address(Pubkey.from_string(wallet_address), limit=5)
@@ -39,7 +44,11 @@ def monitor_wallet():
 
 def process_transaction(tx_details):
     print("Nueva transacción detectada:", tx_details)
-    # Analizar la transacción para determinar qué token se compró/vendió y cuánto
+    whale_balance = get_wallet_balance(WHALE_WALLET)
+    your_balance = get_wallet_balance(YOUR_WALLET)
+    if whale_balance == 0 or your_balance == 0:
+        print("No se puede calcular la proporción correctamente.")
+        return
     instructions = tx_details.get("transaction", {}).get("message", {}).get("instructions", [])
     for instr in instructions:
         if "parsed" in instr:
@@ -47,13 +56,14 @@ def process_transaction(tx_details):
             if "source" in info and "destination" in info:
                 source = info["source"]
                 destination = info["destination"]
-                amount = Decimal(info.get("amount", 0))
+                amount = Decimal(info.get("amount", 0)) / Decimal(10**9)  # Convertir lamports a SOL
                 print(f"Transferencia detectada: {amount} SOL de {source} a {destination}")
                 if source == WHALE_WALLET:
-                    execute_trade(amount)
+                    proportion = your_balance / whale_balance
+                    execute_trade(amount, proportion)
 
-def execute_trade(amount):
-    proportional_amount = amount * PROPORTION
+def execute_trade(amount, proportion):
+    proportional_amount = amount * proportion
     print(f"Ejecutando compra/venta por {proportional_amount} SOL en {YOUR_WALLET}")
     # Aquí se integraría con un exchange o smart contract para replicar la operación
 
